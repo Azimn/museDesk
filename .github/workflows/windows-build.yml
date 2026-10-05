@@ -1,0 +1,44 @@
+name: Windows build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Windows ${{ matrix.arch }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - x64
+          - arm64
+
+    steps:
+      - name: Check out Windows port
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Apply port, validate, and package
+        shell: pwsh
+        run: .\apply-windows-port.ps1 -Target "$env:RUNNER_TEMP\musedesk-windows" -Arch "${{ matrix.arch }}"
+
+      - name: Upload portable Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: MuseDesk-windows-${{ matrix.arch }}
+          path: |
+            ${{ runner.temp }}\musedesk-windows\dist\*.zip
+            ${{ runner.temp }}\musedesk-windows\dist\*.sha256
+          if-no-files-found: error
