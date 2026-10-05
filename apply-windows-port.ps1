@@ -21,6 +21,7 @@ function Invoke-Checked {
         [Parameter(Mandatory = $true)][string]$FilePath,
         [Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments
     )
+
     & $FilePath @Arguments
     if ($LASTEXITCODE -ne 0) {
         throw "$FilePath failed with exit code $LASTEXITCODE"
@@ -33,10 +34,12 @@ function Replace-Exact {
         [Parameter(Mandatory = $true)][string]$Before,
         [Parameter(Mandatory = $true)][string]$After
     )
+
     $text = Get-Content $Path -Raw
     if (-not $text.Contains($Before)) {
         throw "Expected source fragment was not found in $Path. The upstream file may have changed."
     }
+
     $text = $text.Replace($Before, $After)
     [System.IO.File]::WriteAllText($Path, $text, [System.Text.UTF8Encoding]::new($false))
 }
@@ -53,7 +56,10 @@ if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
 
 if (-not (Test-Path $Target)) {
     $TargetParent = Split-Path -Parent $Target
-    if ($TargetParent) { New-Item -ItemType Directory -Path $TargetParent -Force | Out-Null }
+    if ($TargetParent) {
+        New-Item -ItemType Directory -Path $TargetParent -Force | Out-Null
+    }
+
     Invoke-Checked git clone $Upstream $Target
     Invoke-Checked git -C $Target checkout $PinnedCommit
 }
@@ -61,8 +67,12 @@ else {
     if (-not (Test-Path (Join-Path $Target '.git'))) {
         throw "Target exists but is not a Git checkout: $Target"
     }
+
     $head = (& git -C $Target rev-parse HEAD).Trim()
-    if ($LASTEXITCODE -ne 0) { throw 'Unable to read target Git revision.' }
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Unable to read target Git revision.'
+    }
+
     $dirty = (& git -C $Target status --porcelain)
     if (-not $Force -and $head -ne $PinnedCommit) {
         throw "Target is at $head, expected $PinnedCommit. Re-run with -Force only if you intend to port another revision."
@@ -81,34 +91,34 @@ Get-ChildItem -LiteralPath $Overlay -File -Recurse -Force | ForEach-Object {
 }
 
 $HostPath = Join-Path $Target 'src\msp\host.ts'
-$host = Get-Content $HostPath -Raw
+$hostSource = Get-Content $HostPath -Raw
 $hostNeedle = "      stdio: ['pipe', 'pipe', 'pipe'],"
-if (-not $host.Contains($hostNeedle)) {
+if (-not $hostSource.Contains($hostNeedle)) {
     throw "Expected spawn options were not found in $HostPath. The upstream file may have changed."
 }
-$hostEol = if ($host.Contains("`r`n")) { "`r`n" } else { "`n" }
+$hostEol = if ($hostSource.Contains("`r`n")) { "`r`n" } else { "`n" }
 $hostInsert = $hostNeedle + $hostEol +
     '      windowsHide: true,' + $hostEol +
     "      shell: process.platform === 'win32' && /\.(cmd|bat)$/i.test(this.binPath),"
-$host = $host.Replace($hostNeedle, $hostInsert)
-[System.IO.File]::WriteAllText($HostPath, $host, [System.Text.UTF8Encoding]::new($false))
+$hostSource = $hostSource.Replace($hostNeedle, $hostInsert)
+[System.IO.File]::WriteAllText($HostPath, $hostSource, [System.Text.UTF8Encoding]::new($false))
 
 $ProjectsPath = Join-Path $Target 'src\shared\projects.ts'
-Replace-Exact $ProjectsPath "folder.split('/').filter(Boolean)" "folder.split(/[\\/]+/).filter(Boolean)"
-Replace-Exact $ProjectsPath "folder.replace(/\/+\`$/, '')" "folder.replace(/[\\/]+\`$/, '')"
+Replace-Exact $ProjectsPath "folder.split('/').filter(Boolean)" 'folder.split(/[\\/]+/).filter(Boolean)'
+Replace-Exact $ProjectsPath 'folder.replace(/\/+$/, '''')' 'folder.replace(/[\\/]+$/, '''')'
 
 $SidebarPath = Join-Path $Target 'src\ui\Sidebar.tsx'
-Replace-Exact $SidebarPath "s.workspaceRoot.split('/').filter(Boolean).pop()" "s.workspaceRoot.split(/[\\/]+/).filter(Boolean).pop()"
+Replace-Exact $SidebarPath "s.workspaceRoot.split('/').filter(Boolean).pop()" 's.workspaceRoot.split(/[\\/]+/).filter(Boolean).pop()'
 Replace-Exact $SidebarPath '<button className="kbd" onClick={onPalette} title="Open command palette (⌘K)" aria-label="Open command palette">⌘K</button>' '<button className="kbd" onClick={onPalette} title="Open command palette (Ctrl+K)" aria-label="Open command palette">Ctrl K</button>'
 
 $AppPath = Join-Path $Target 'src\ui\App.tsx'
-$app = Get-Content $AppPath -Raw
-$needle = "replace(/\/+\`$/, '')"
-if (-not $app.Contains($needle)) {
+$appSource = Get-Content $AppPath -Raw
+$appNeedle = 'replace(/\/+$/, '''')'
+if (-not $appSource.Contains($appNeedle)) {
     throw "Expected path-normalization fragment was not found in $AppPath"
 }
-$app = $app.Replace($needle, "replace(/[\\/]+\`$/, '')")
-[System.IO.File]::WriteAllText($AppPath, $app, [System.Text.UTF8Encoding]::new($false))
+$appSource = $appSource.Replace($appNeedle, 'replace(/[\\/]+$/, '''')')
+[System.IO.File]::WriteAllText($AppPath, $appSource, [System.Text.UTF8Encoding]::new($false))
 
 $PackagingTestPath = Join-Path $Target 'test\unit\packaging.test.ts'
 Replace-Exact $PackagingTestPath "it('ships a single DMG maker with a distinct installer volume title', async () => {" "it('ships a single DMG maker with a distinct installer volume title', { skip: process.platform === 'win32' }, async () => {"
