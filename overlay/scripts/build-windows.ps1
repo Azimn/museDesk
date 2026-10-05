@@ -97,8 +97,10 @@ try {
     }
 
     $PreviousNodeOptions = $env:NODE_OPTIONS
+    $ShimForNode = ([System.IO.Path]::GetFullPath($Shim)).Replace('\\', '/')
+    $RequireOption = "--require=$ShimForNode"
     try {
-        $env:NODE_OPTIONS = if ($PreviousNodeOptions) { "$PreviousNodeOptions --require `"$Shim`"" } else { "--require `"$Shim`"" }
+        $env:NODE_OPTIONS = if ($PreviousNodeOptions) { "$PreviousNodeOptions $RequireOption" } else { $RequireOption }
         Invoke-Checked $Forge package '--platform=win32' "--arch=$Arch"
     }
     finally {
