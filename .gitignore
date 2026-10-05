@@ -1,0 +1,4 @@
+musedesk-windows/
+*.zip
+*.sha256
+.DS_Store
