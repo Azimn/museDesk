@@ -126,7 +126,8 @@ Replace-Exact $PackagingTestPath "it('ships a single DMG maker with a distinct i
 $GitIgnore = Join-Path $Target '.gitignore'
 $ignore = Get-Content $GitIgnore -Raw
 if (-not $ignore.Contains('assets/icon.ico')) {
-    Add-Content -Path $GitIgnore -Value "`n# Generated Windows application icon`nassets/icon.ico`n"
+    Add-Content -Path $GitIgnore -Value '# Generated Windows application icon'
+    Add-Content -Path $GitIgnore -Value 'assets/icon.ico'
 }
 
 Invoke-Checked git -C $Target diff --check
